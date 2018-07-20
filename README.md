@@ -4,11 +4,12 @@ Cross-chain checkpoints implementation
 # Requirements
 
 Python 3 is required.
-
-Install the required packages.
+Install the required packages in `requirements.txt`.
 Start an Ethereum node such as Geth or Parity.
 
-Run `eth_reader.py` to retrieve the checkpoints.
+# Usage
 
-Run `eth_checkpoints.py` to add checkpoints through a wallet within the Ethereum node.
+Run `eth_reader.py` to submit the checkpoints (requires a wallet in Ethereum node).
+
+Run `eth_checkpoints.py` to load checkpoints from Ethereum chain (no Ethereum wallet required).
 
