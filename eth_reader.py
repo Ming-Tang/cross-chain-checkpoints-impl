@@ -4,6 +4,7 @@ import codecs
 from collections import defaultdict, namedtuple
 from shutil import copyfile
 from data_encoding import deserialize_header, is_verified_header, bfh, block_hash
+import consensus as cons
 
 """Retrieves checkpoints from the Ethereum blockchain."""
 
@@ -11,12 +12,11 @@ from data_encoding import deserialize_header, is_verified_header, bfh, block_has
 class CpEntry(namedtuple('CpEntry', 'tx_index main_time sub_time main_sender')):
     pass
 
-cp_address = '0x4d6f6e61636f696e20436865636B706f696e7473'
 prefix = 'CpM1'
 hex_prefix = '0x' + codecs.encode(prefix.encode('ascii'), 'hex').decode('ascii')
 #print(hex_prefix)
 
-data = {'height': 3671900, 'transactions': {}, 'blocks': {}}
+data = {'height': cons.main_height_init, 'transactions': {}, 'blocks': {}}
 
 try:
     with open('data.json', 'r') as f:
@@ -31,7 +31,7 @@ def sync():
     global data
     new_height = w3.eth.blockNumber
 
-    h0 = data['height'] - 10
+    h0 = data['height'] - 5 # look 5 blocks behind in case of reorgs
     print('Blocks to sync: {}'.format(new_height - h0))
     if new_height > h0:
 
@@ -52,7 +52,7 @@ def sync():
             blk = w3.eth.getBlock(i)
             for txid in blk.transactions:
                 tx = w3.eth.getTransaction(txid)
-                if tx.to == cp_address and tx.input.find(hex_prefix) == 0:
+                if tx.to == cons.cp_address and tx.input.find(hex_prefix) == 0:
                     tx_data = {
                         'blockHash': tx.blockHash.hex(),
                         'transactionIndex': tx.transactionIndex,
@@ -101,7 +101,7 @@ for hh, txs in txs_by_height.items():
         print(json.dumps(decoded_header, indent=2))
         print(bhash)
 
-        if height % cp_period == 0:
+        if cons.is_eligible_sub_height(height):
             entry = CpEntry(
                 order,
                 data['blocks'][str(tx['blockNumber'])]['timestamp'],

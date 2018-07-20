@@ -5,15 +5,14 @@ from insight_listener import InsightListener, get_block
 from web3.auto import w3
 from data_encoding import encode_block
 from time import sleep
-
-cp_address = '0x4d6f6e61636f696e20436865636B706f696e7473'
+import consensus as cons
 
 
 def submit_checkpoint(block, prev_block):
     data = encode_block(block, use_header=True, use_reduced_header=False)
     print(data)
     res = w3.eth.sendTransaction({
-        'to': cp_address,
+        'to': cons.cp_address,
         'data': '0x' + data
     })
     print(res)
@@ -28,8 +27,7 @@ class EthereumCheckpoints(InsightListener):
         print(encode_block(block, prev_block))
         height = block['height']
 
-        #if height % 10 == 0:
-        if True:
+        if cons.is_eligible_sub_height(height):
             print()
             print('Submitting checkpoint...')
             submit_checkpoint(block, prev_block)
