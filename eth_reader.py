@@ -75,10 +75,9 @@ with open('data.json', 'w') as f:
     json.dump(data, f, indent=2, sort_keys=True)
 
 
+existing_headers = {}
 cps_by_height = defaultdict(lambda: defaultdict(lambda: set()))
 txs_by_height = data['transactions']
-
-cp_period = 10
 
 
 for hh, txs in txs_by_height.items():
@@ -98,6 +97,12 @@ for hh, txs in txs_by_height.items():
             print('  *** Proof of work is not verified.')
             continue
 
+        if existing_headers.get(header, None) not in (None, height):
+            print('  *** Header already exists in another height: ', existing_headers.get(header))
+            continue
+
+        existing_headers[header] = height
+
         print(json.dumps(decoded_header, indent=2))
         print(bhash)
 
@@ -112,6 +117,7 @@ for hh, txs in txs_by_height.items():
 
 import pprint
 pprint.pprint({
-    k: {k1: sorted(map(tuple, v1)) for k1, v1 in v.items()}
+    k: {k1: sorted((tuple(t), t.main_time - t.sub_time) for t in v1) for k1, v1 in v.items()}
     for k, v in cps_by_height.items()
 }, width=200)
+

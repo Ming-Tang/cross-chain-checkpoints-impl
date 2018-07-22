@@ -37,7 +37,7 @@ def encode_height(h):
     return ('0' * (6 - len(h0))) + h0
 
 
-def encode_block(b, prev_block=None, use_header=True, use_reduced_header=True):
+def encode_block(b, prev_block=None, use_header=True, use_reduced_header=True, height=None):
     prefix = 'CpM' + ('1' if use_header else '0')
     prefix_bytes = bytes(prefix, 'utf-8')
     prefix_hex = codecs.encode(prefix_bytes, 'hex').decode('utf-8')
@@ -51,8 +51,8 @@ def encode_block(b, prev_block=None, use_header=True, use_reduced_header=True):
     else:
         body = b['hash']
 
-    print(prefix_hex, encode_height(b['height']), body)
-    return prefix_hex + encode_height(b['height']) + body
+    if height is None: height = b['height']
+    return prefix_hex + encode_height(height) + body
 
 
 def powhash(header):

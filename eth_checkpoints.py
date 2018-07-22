@@ -8,7 +8,7 @@ from time import sleep
 import consensus as cons
 
 
-def submit_checkpoint(block, prev_block):
+def submit_checkpoint(block):
     data = encode_block(block, use_header=True, use_reduced_header=False)
     print(data)
     res = w3.eth.sendTransaction({
@@ -22,15 +22,13 @@ class EthereumCheckpoints(InsightListener):
 
     def on_block(self, block_hash):
         block = get_block(block_hash)
-        prev_block = get_block(block['previousblockhash'])
         print(json.dumps(block, indent=2))
-        print(encode_block(block, prev_block))
         height = block['height']
 
         if cons.is_eligible_sub_height(height):
             print()
             print('Submitting checkpoint...')
-            submit_checkpoint(block, prev_block)
+            submit_checkpoint(block)
 
 
     def on_disconnect(self):
