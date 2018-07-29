@@ -1,3 +1,5 @@
+from __future__ import division, print_function
+import sys
 from web3.auto import w3
 import json
 import codecs
@@ -5,16 +7,20 @@ from collections import defaultdict, namedtuple
 from shutil import copyfile
 from data_encoding import deserialize_header, is_verified_header, bfh, block_hash
 import consensus as cons
+from bitcoin_chain import get_block
 
 """Retrieves checkpoints from the Ethereum blockchain."""
 
+
+def eprint(*args, **kwargs):
+    return print(*args, file=sys.stderr, **kwargs)
 
 class CpEntry(namedtuple('CpEntry', 'tx_index main_time sub_time main_sender')):
     pass
 
 prefix = 'CpM1'
 hex_prefix = '0x' + codecs.encode(prefix.encode('ascii'), 'hex').decode('ascii')
-#print(hex_prefix)
+#eprint(hex_prefix)
 
 
 data = None
@@ -22,8 +28,12 @@ data = None
 
 def find_initial_height(h0):
     global data
+    h0_initial = h0
+    import_block(h0 - 1)
+    import_block(h0)
     while True:
-        last_hash = data['blocks'][str(h0)]['hash']
+        last_hash = data['blocks'].get(str(h0), {'hash': None})['hash']
+
         next_block = w3.eth.getBlock(h0 + 1)
         if not next_block:
             break
@@ -33,14 +43,17 @@ def find_initial_height(h0):
         else:
             break
 
+    if h0_initial != h0:
+        eprint('final_initial_height({}) = {}'.format(h0_initial, h0))
+
     return h0
 
 
-def import_block(i, last_hash):
+def import_block(i, last_hash=None):
     global data
     key = str(i)
     block = w3.eth.getBlock(i)
-    print(block.hash.hex(), block.parentHash.hex() == last_hash)
+    assert last_hash is None or block.parentHash.hex() == last_hash, 'reorg detected'
     last_hash = block.hash.hex()
 
     data['blocks'][key] = {
@@ -49,7 +62,7 @@ def import_block(i, last_hash):
         'parentHash': block.parentHash.hex()
     }
 
-    data['transactions'][key] = []
+    txs = []
 
     for txid in block.transactions:
         tx = w3.eth.getTransaction(txid)
@@ -62,31 +75,40 @@ def import_block(i, last_hash):
                 'from': tx['from'],
                 'input': tx.input
             }
-            #print(tx.input.strip('0x'))
+            #eprint(tx.input.strip('0x'))
 
-            data['transactions'][key].append(tx_data)
+            txs.append(tx_data)
+
+    if len(txs) != 0:
+        data['transactions'][key] = txs
 
     return last_hash
 
 
-def sync():
+def sync_blocks():
     global data
     new_height = w3.eth.blockNumber
     h0 = find_initial_height(data['height'])
-    print('Blocks to sync: {}'.format(new_height - h0))
+    eprint('Blocks to sync: {}'.format(new_height - h0))
 
-    if new_height > h0:
+    try:
+        last_height = h0
+        if new_height <= h0:
+            return
+
         last_hash = data['blocks'][str(h0 - 1)]['hash']
 
         for i in range(h0, new_height + 1):
             if i % 25 == 0:
-                print('{:.4}% {}'.format(
+                eprint('{:.4}% {}'.format(
                     100.0 * (i - h0) / (new_height - h0), i))
 
             last_hash = import_block(i, last_hash)
+            last_height = i
 
 
-    data['height'] = new_height
+    finally:
+        data['height'] = last_height
 
 
 def import_tx(tx):
@@ -100,13 +122,14 @@ def import_tx(tx):
     order = (tx['blockNumber'], tx['transactionIndex'])
     bhash = block_hash(header)
 
-    #print('{}:{:3} | {:7} {}'.format(order[0], order[1], height, header))
+    #eprint('{}:{:3} | {:7} {}'.format(order[0], order[1], height, header))
     if not verified:
-        print('  *** Proof of work is not verified.')
+        eprint('  *** Proof of work is not verified.')
         return False
 
-    if existing_headers.get(header, None) not in (None, height):
-        print('  *** Header already exists in another height: ', existing_headers.get(header))
+    if existing_headers.get(header, None) not in (None, height) or get_block(bhash).get('height') != height:
+        res = get_block(bhash)
+        eprint('  *** Header already exists in another height: ', existing_headers.get(header) or res.get('height'))
         return False
 
     existing_headers[header] = height
@@ -146,27 +169,36 @@ def save_data():
 
 
 if __name__ == '__main__':
-
     load_data()
-    sync()
-    save_data()
-
+    try: sync_blocks()
+    finally: save_data()
 
     existing_headers = {}
     cps_by_height = defaultdict(lambda: defaultdict(lambda: set()))
     txs_by_height = data['transactions']
 
-    print('')
+    eprint('')
 
     for hh, txs in txs_by_height.items():
         txs.sort(key=lambda tx: (tx.get('blockNumber'), tx.get('transactionIndex')))
         for tx in txs:
             import_tx(tx)
 
-    print('')
-    import pprint
-    pprint.pprint({
-        k: {k1: sorted((tuple(t), t.main_time - t.sub_time) for t in v1) for k1, v1 in v.items()}
+    eprint('')
+    print(json.dumps({
+        k: {
+            k1: [dict(dt=t.main_time - t.sub_time, **t._asdict()) for t in sorted(v1)]
+            for k1, v1 in v.items()
+        }
         for k, v in sorted(cps_by_height.items(), reverse=True)
-    }, width=200)
+    }, indent=2, sort_keys=True))
+
+    #import pprint
+    #pprint.pprint({
+    #    k: {
+    #        k1: sorted((tuple(t), t.main_time - t.sub_time) for t in v1)
+    #        for k1, v1 in v.items()
+    #    }
+    #    for k, v in sorted(cps_by_height.items(), reverse=True)
+    #}, width=200)
 
