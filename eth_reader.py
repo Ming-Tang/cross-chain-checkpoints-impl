@@ -127,7 +127,8 @@ def import_tx(tx):
         eprint('  *** Proof of work is not verified.')
         return False
 
-    if existing_headers.get(header, None) not in (None, height) or get_block(bhash).get('height') != height:
+    blk = get_block(bhash)
+    if existing_headers.get(header, None) not in (None, height) or (blk is not None and blk.get('height') != height):
         res = get_block(bhash)
         eprint('  *** Header already exists in another height: ', existing_headers.get(header) or res.get('height'))
         return False
