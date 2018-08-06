@@ -16,21 +16,14 @@ import sys
 import traceback
 from collections import namedtuple
 
-#VERBOSE = False
-VERBOSE = True
+from ecdsa.ecdsa import curve_secp256k1, generator_secp256k1
+from ecdsa.curves import SECP256k1
 
-# secp256k1, http://www.oid-info.com/get/1.3.132.0.10
-_p = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F
-_r = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
-_b = 0x0000000000000000000000000000000000000000000000000000000000000007
-_a = 0x0000000000000000000000000000000000000000000000000000000000000000
-_Gx = 0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798
-_Gy = 0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8
-curve_secp256k1 = ecdsa.ellipticcurve.CurveFp( _p, _a, _b )
-generator_secp256k1 = ecdsa.ellipticcurve.Point( curve_secp256k1, _Gx, _Gy, _r )
-oid_secp256k1 = (1,3,132,0,10)
-SECP256k1 = ecdsa.curves.Curve("SECP256k1", curve_secp256k1, generator_secp256k1, oid_secp256k1 )
+VERBOSE = False
+#VERBOSE = True
 
+# TODO Unlike Electrum, this script does not support P2SH formats
+# TODO support altcoin private key formats
 
 class SigFormat(namedtuple('SigFormat', 'addrtype msg_prefix')):
     pass
@@ -38,8 +31,11 @@ class SigFormat(namedtuple('SigFormat', 'addrtype msg_prefix')):
 
 bitcoin_sig_format = SigFormat(0, b'\x18Bitcoin Signed Message:\n')
 
-import consensus
-sig_format = consensus
+try:
+    import consensus
+    sig_format = consensus
+except ImportError:
+    sig_format = bitcoin_sig_format
 
 # from http://eli.thegreenplace.net/2009/03/07/computing-modular-square-roots-in-python/
 
@@ -357,23 +353,20 @@ def sign_and_verify(wifPrivateKey, message, bitcoinaddress, compressed=True):
 
 
 def test_sign_messages():
-    global sig_format
-    sig_format = bitcoin_sig_format
-
     wif1 = '5KMWWy2d3Mjc8LojNoj8Lcz9B1aWu8bRofUgGwQk959Dw5h2iyw'
     compressedPrivKey1 = 'L41XHGJA5QX43QRG3FEwPbqD5BYvy6WxUxqAMM9oQdHJ5FcRHcGk'
     addressUncompressesed1 = '1HUBHMij46Hae75JPdWjeZ5Q7KaL7EFRSD'
     addressCompressesed1 = '14dD6ygPi5WXdwwBTt1FBZK3aD8uDem1FY'
     msg1 = 'test message'
-    print('sig:\n', sign_and_verify(wif1, msg1, addressUncompressesed1, False)) # good
-    print('sig:\n', sign_and_verify(wif1, msg1, addressCompressesed1)) # good
-    #print('sig:\n', sign_and_verify(wif1, msg1, addressUncompressesed1)) # bad
-    #print('sig:\n', sign_and_verify(wif1, msg1, addressCompressesed1, False)) # bad
+    print('sig:', sign_and_verify(wif1, msg1, addressUncompressesed1, False)) # good
+    print('sig:', sign_and_verify(wif1, msg1, addressCompressesed1)) # good
+    #print('sig:', sign_and_verify(wif1, msg1, addressUncompressesed1)) # bad
+    #print('sig:', sign_and_verify(wif1, msg1, addressCompressesed1, False)) # bad
 
-    print('sig:\n', sign_and_verify(compressedPrivKey1, msg1, addressCompressesed1)) # good
-    print('sig:\n', sign_and_verify(compressedPrivKey1, msg1, addressUncompressesed1, False)) # good
-    #print 'sig:\n', sign_and_verify(compressedPrivKey1, msg1, addressUncompressesed1) # bad
-    #print 'sig:\n', sign_and_verify(compressedPrivKey1, msg1, addressCompressesed1, False) # bad
+    print('sig:', sign_and_verify(compressedPrivKey1, msg1, addressCompressesed1)) # good
+    print('sig:', sign_and_verify(compressedPrivKey1, msg1, addressUncompressesed1, False)) # good
+    #print('sig:', sign_and_verify(compressedPrivKey1, msg1, addressUncompressesed1)) # bad
+    #print('sig:', sign_and_verify(compressedPrivKey1, msg1, addressCompressesed1, False)) # bad
 
 
 if sys.version_info >= (3, 0):
@@ -414,27 +407,27 @@ def verify_input_message():
     message = raw_input("Enter message:\n")
     signature = raw_input("Enter signature:\n")
 
-    """
-    address = '14dD6ygPi5WXdwwBTt1FBZK3aD8uDem1FY'
-    message = 'test message'
-    signature = 'IPn9bbEdNUp6+bneZqE2YJbq9Hv5aNILq9E5eZoMSF3/fBX4zjeIN6fpXfGSGPrZyKfHQ/c/kTSP+NIwmyTzMfk='
-    #"""
-
     print()
     print(address)
     print(message)
     print(signature)
-    print('Message verified:', verify_message(address, signature, message))
+    outcome = verify_message(address, signature, message)
+    print('Message verified:', outcome)
+    sys.exit(0 if outcome else 1)
+
 
 def main():
     argv = sys.argv
-    if len(argv) > 1 and argv[1] == '-s':
+    if len(argv) > 1 and argv[1] == '-t':
+        global sig_format
+        sig_format = bitcoin_sig_format
+        test_sign_messages()
+    elif len(argv) > 1 and argv[1] == '-s':
         sign_input_message()
     else:
         verify_input_message()
 
 
 if __name__ == '__main__':
-    test_sign_messages()
-    sig_format = consensus
     main()
+
