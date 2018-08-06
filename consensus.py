@@ -17,3 +17,6 @@ sub_block_phase = 0
 def is_eligible_sub_height(height):
     return height % sub_block_period == sub_block_phase
 
+addrtype = 50 # 'M'
+msg_prefix = b"\x19Monacoin Signed Message:\n"
+
