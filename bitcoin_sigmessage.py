@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 
 # This code is a modified version of bitcoin-sign-message
-#
 
 # the code below is 'borrowed' almost verbatim from electrum,
 # https://gitorious.org/electrum/electrum
 # and is under the GPLv3.
 
 from __future__ import print_function
+import struct
 import ecdsa
 import base64
 import hashlib
@@ -191,12 +191,23 @@ def b58decode(v, length):
 
     return result
 
+
+def varint(n):
+    if n < 0xfd:
+        return struct.pack('<B', n)
+    elif n <= 0xffff:
+        return b'\xfd' + struct.pack('<H', n)
+    elif n <= 0xffffffff:
+        return b'\xfe' + struct.pack('<I', n)
+    else:
+        return b'\xff' + struct.pack('<Q', n)
+
 if sys.version_info >= (3, 0):
     def msg_magic(message):
-        return sig_format.msg_prefix + bchr( len(message) ) + bytes(message, 'utf-8')
+        return sig_format.msg_prefix + varint(len(message)) + bytes(message, 'utf-8')
 else:
     def msg_magic(message):
-        return sig_format.msg_prefix + bchr( len(message) ) + bytes(message)
+        return sig_format.msg_prefix + varint(len(message)) + bytes(message)
 
 def Hash(data):
     return hashlib.sha256(hashlib.sha256(data).digest()).digest()
