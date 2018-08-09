@@ -1,3 +1,5 @@
+requests
+click
 lyra2re2_hash
 web3
 socketIO-client
